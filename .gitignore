@@ -64,3 +64,11 @@ Thumbs.db
 .claude/
 .claude.local/
 *.local.json
+
+# Added 2026-04-20 — catch common secret filename patterns (three incidents in one session)
+Anthropic-Key
+**/Anthropic-Key
+**/*-Key
+**/*-Token
+**/*-PAT
+**/*-Secret
