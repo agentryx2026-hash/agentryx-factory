@@ -1,0 +1,68 @@
+# Agentryx Dev Factory — Roadmap
+
+**This is the master plan.** Read this first in any new session.
+
+## Operating principles
+
+See [00_Architectural_Principles.md](00_Architectural_Principles.md) for the full version. Headlines:
+
+1. **Configurability over commitment** — every choice has options selectable from admin UI. We're in v0.0.1 R&D / experimentation, *not* production. Choose all reasonable approaches and compare.
+2. **Agile, sketch-then-detail** — only the next 1-2 phases are detailed. Future phases are one-liners until ratified.
+3. **Verify portal and Documentation are separate modules** — factory integrates with them, doesn't subsume them.
+4. **Right model for the right task** — multi-tier LLM routing from day one (Phase 2).
+
+## Roadmap (20 phases)
+
+| # | Phase | One-line goal | Status |
+|---|---|---|---|
+| 0 | **GitHub setup** | Fresh `agentryx-factory` repo, structure, labels, milestones, Project board | in progress |
+| 1 | [Restore and Observe](Phase_01_Restore_and_Observe/Phase_01_Plan.md) | Get current pipeline alive, instrumented, repeatable on any VM | blocked on user inputs |
+| 1.5 | [Rename and Monorepo](Phase_1.5_Rename_and_Monorepo/Phase_1.5_Plan.md) | Rename `pixel-factory-ui` → `factory-dashboard`, migrate working dirs into mono-repo (carefully — docker volumes!) | sketched |
+| 2 | [LLM Router and Cost Telemetry](Phase_02_LLM_Router/Phase_02_Plan.md) | LiteLLM + OpenRouter, switchable; per-task model assignment; per-call $ captured | sketched |
+| 3 | [Intake Stage (Genovi)](Phase_03_Intake_Genovi/Phase_03_Plan.md) | New first agent. SRS/FRS/PRD → structured requirement extraction | one-liner |
+| 4 | [PMD Template Registry](Phase_04_PMD_Template_Registry/Phase_04_Plan.md) | Formalize 25-30 standard docs as versioned templates with dependency graph | one-liner |
+| 5 | [MCP Tool Plane](Phase_05_MCP_Tool_Plane/Phase_05_Plan.md) | Replace custom `tools.js` with MCP servers (fs, git, github, postgres, browser) | one-liner |
+| 6 | [Artifact-First State](Phase_06_Artifact_First_State/Phase_06_Plan.md) | Typed outputs (PMD/code/test/doc) to versioned artifact store | one-liner |
+| 7 | [Memory Layer v1](Phase_07_Memory_Layer/Phase_07_Plan.md) | Obsidian vault (human-curated) + vector index (auto) hybrid | one-liner |
+| 8 | [Parallel Artifacts](Phase_08_Parallel_Artifacts/Phase_08_Plan.md) | Restructure graph: code/tests/docs as concurrent branches under fan-out/join | one-liner |
+| 9 | [Verification Queue (Verify integration)](Phase_09_Verification_Queue/Phase_09_Plan.md) | Stand up Verify portal; factory pushes test cases; humans approve/reject; feedback loops back | one-liner |
+| 10 | [Hermes — External Comms](Phase_10_Hermes_External_Comms/Phase_10_Plan.md) | New agent. GitHub PR open/comment, Slack, email reports | one-liner |
+| 11 | [Cost + Quota Dashboard](Phase_11_Cost_Quota_Dashboard/Phase_11_Plan.md) | Per-project, per-agent, per-model spend. Hard caps + alerts | one-liner |
+| 12 | [B7 Admin Module v1](Phase_12_B7_Admin_Module/Phase_12_Plan.md) | Key manager + feature flags + role-gated UI (per existing PMD `B7` spec) | one-liner |
+| 13 | [Pipeline Replay / Debug](Phase_13_Pipeline_Replay/Phase_13_Plan.md) | Time-travel any past run; re-execute from any node | one-liner |
+| 14 | [Multi-Project Concurrency](Phase_14_Multi_Project_Concurrency/Phase_14_Plan.md) | Queue + scheduler; N projects in factory at once with isolation | one-liner |
+| 15 | [Self-Improvement Loop](Phase_15_Self_Improvement_Loop/Phase_15_Plan.md) | Agents propose graph changes; gated by Super Admin approval | one-liner |
+| 16 | [Training Scripts Generation](Phase_16_Training_Scripts_Gen/Phase_16_Plan.md) | Output written user guides + voiceover scripts as artifacts | one-liner |
+| 17 | [Training Videos](Phase_17_Training_Videos/Phase_17_Plan.md) | ElevenLabs voiceover + headless browser screen capture stitched | one-liner |
+| 18 | [Pipeline Module Marketplace](Phase_18_Pipeline_Module_Marketplace/Phase_18_Plan.md) | Install/swap agents as packages with manifest | one-liner |
+| 19 | [Customer Portal](Phase_19_Customer_Portal/Phase_19_Plan.md) | Non-admin users submit projects; SLA + status tracking | one-liner |
+| 20 | [Public Release](Phase_20_Public_Release/Phase_20_Plan.md) | Multi-tenant, billing, hardening, compliance | one-liner |
+
+Phases 16-20 will absolutely change as we learn.
+
+## Cross-cutting modules
+
+These are not phases — they're standards / interfaces that span multiple phases.
+
+| Module | Purpose |
+|---|---|
+| [Modules/Verify_Portal_Integration.md](Modules/Verify_Portal_Integration.md) | How factory feeds Verify; how feedback returns; boundary contract |
+| [Modules/Documentation_Module.md](Modules/Documentation_Module.md) | User guides, reference docs, briefs — own track, parallel to code |
+| [Modules/Testing_In_Pipeline.md](Modules/Testing_In_Pipeline.md) | Tuvok-driven smoke / load / UI / E2E during dev cycle |
+
+## Reference
+
+- [01_Agent_Delegation_Model.md](01_Agent_Delegation_Model.md) — which model (Opus 4.7 / Sonnet 4.6 / Haiku 4.5 / Gemini / cheap-tier) does what task type, with cost rationale.
+
+## Per-phase folder structure
+
+Each `Phase_NN_*/` folder contains four files:
+
+| File | Purpose |
+|---|---|
+| `Phase_NN_Plan.md` | The plan (full for current phase, sketch for future) |
+| `Phase_NN_Status.md` | Live status — what's done, blocked, next |
+| `Phase_NN_Decisions.md` | Decisions log — chose X over Y because Z |
+| `Phase_NN_Lessons.md` | Post-mortem — filled at phase close, feeds future phases |
+
+Status / Decisions / Lessons files are created when a phase moves from sketch → active.
