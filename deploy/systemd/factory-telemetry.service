@@ -1,0 +1,18 @@
+[Unit]
+Description=Agentryx Dev Factory - Telemetry + cognitive-engine spawner (port 4401)
+After=network.target
+
+[Service]
+Type=simple
+User=subhash.thakur.india
+Group=subhash.thakur.india
+WorkingDirectory=/home/subhash.thakur.india/Projects/pixel-factory-ui
+Environment=PATH=/home/subhash.thakur.india/.nvm/versions/node/v22.22.2/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ExecStart=/home/subhash.thakur.india/.nvm/versions/node/v22.22.2/bin/node server/telemetry.mjs
+Restart=on-failure
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
