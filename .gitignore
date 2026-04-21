@@ -72,3 +72,11 @@ Anthropic-Key
 **/*-Token
 **/*-PAT
 **/*-Secret
+
+# Catch keys/tokens anywhere in basename (file 'Claude Key-Open-Router'
+# slipped past *-Key/*-Token because it doesn't end with those suffixes).
+**/*[Kk]ey*
+**/*[Tt]oken*
+**/*[Ss]ecret*
+**/*[Cc]redential*
+!**/node_modules/**

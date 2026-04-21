@@ -26,7 +26,11 @@ async function callOpenAICompatible(baseUrl, apiKey, model, messages, { signal, 
   if (!apiKey) {
     throw httpError(401, `missing API key for backend at ${baseUrl} — set the corresponding _API_KEY env var`);
   }
-  const body = JSON.stringify({ model, messages, stream: false });
+  // max_tokens cap: providers like Anthropic-via-OpenRouter reserve credits
+  // upfront based on the cap (not actual usage). Default model max can be 64K
+  // which requires a heavy prepaid balance. 4096 is sane for most factory tasks
+  // and per-task overrides land in 2D.
+  const body = JSON.stringify({ model, messages, stream: false, max_tokens: 4096 });
   const res = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
