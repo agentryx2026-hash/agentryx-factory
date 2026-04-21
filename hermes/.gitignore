@@ -1,0 +1,3 @@
+# Hermes persistent state — contains skills, memory, user profiles.
+# Bind-mounted into the container at /opt/data. Keep local only.
+data/

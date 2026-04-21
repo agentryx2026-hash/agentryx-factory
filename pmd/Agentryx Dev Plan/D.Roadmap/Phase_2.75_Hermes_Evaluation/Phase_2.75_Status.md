@@ -6,11 +6,11 @@
 
 | Sub | What | Status |
 |---|---|---|
-| 2.75-A | Install Hermes (Docker, isolated) | ⏳ pending |
-| 2.75-B | Define 3 benchmark tasks | ⏳ pending |
-| 2.75-C | Run side-by-side benchmarks | ⏳ pending |
-| 2.75-D | Decision matrix (7 slots × 4 options) | ⏳ pending |
-| 2.75-E | Update downstream phase plans (7, 10, 15, 18) | ⏳ pending |
+| 2.75-A | Install Hermes (Docker, isolated) | ✅ done — image pulled, container boots cleanly, 28 tools + 67 skills loaded, batch_runner.py verified as benchmarking interface |
+| 2.75-B | Define 3 benchmark tasks (JSONL dataset) | ⏳ next session |
+| 2.75-C | Run side-by-side benchmarks | ⏳ next session |
+| 2.75-D | Decision matrix (7 slots × 4 options) | ⏳ next session |
+| 2.75-E | Update downstream phase plans (7, 10, 15, 18) | ⏳ next session |
 
 ## Notes
 

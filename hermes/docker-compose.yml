@@ -1,0 +1,45 @@
+version: "3.9"
+name: hermes
+
+# Phase 2.75 — isolated Hermes Agent evaluation instance.
+# Brings up ONE container (`factory-hermes`). No dependencies on the main
+# factory stack; tear down with `docker compose down -v && rm -rf data/`.
+
+services:
+  hermes:
+    image: nousresearch/hermes-agent:latest
+    container_name: factory-hermes
+    restart: unless-stopped
+
+    # Keep stdin/tty open so we can `docker exec -it factory-hermes hermes`
+    # for interactive setup / chat.
+    stdin_open: true
+    tty: true
+
+    volumes:
+      # HERMES_HOME — persistent data, skills, memory, user profiles.
+      # Bind-mount to host so tear-down is obvious.
+      - ./data:/opt/data
+
+    environment:
+      # UID matching host user so files written to ./data have correct perms.
+      - HERMES_UID=1001
+
+      # Provider keys passed through from the host shell. The host env gets
+      # these from ~/Projects/claw-code-parity/.env at `docker compose up`
+      # time (via --env-file or a sourced .env next to this compose).
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+
+      # Required by Hermes's Dockerfile (already ENV'd in image, repeated for clarity)
+      - PYTHONUNBUFFERED=1
+      - HERMES_HOME=/opt/data
+
+    # Port mapping — Hermes's Dockerfile doesn't EXPOSE any ports, so gateway
+    # modes (TUI, web, webhook) come in after `hermes setup`. Reserve 4600 on
+    # the host for whatever Hermes's primary gateway ends up being. Leave
+    # this commented until we know — first run figures it out.
+    # ports:
+    #   - "4600:4600"

@@ -45,3 +45,53 @@
 - Reduces key management surface — the factory stays source-of-truth for model credentials.
 
 **Caveat**: If Hermes has native features that require Nous Portal (e.g. Honcho is hosted), we enable those separately and document cost.
+
+---
+
+## Decisions made during Phase 2.75-A (install)
+
+### D67 — Use official `nousresearch/hermes-agent:latest` image, not build from source
+
+**What**: `docker pull nousresearch/hermes-agent:latest` — use the published image directly rather than running the install script in a custom Dockerfile.
+
+**Why**:
+- Image is official (Docker Hub, NousResearch namespace). Signed by upstream.
+- Saves build time + avoids maintaining our own Dockerfile that drifts from upstream.
+- Matches upstream's supported deployment pattern.
+- Existing image has `PYTHONUNBUFFERED`, `PLAYWRIGHT_BROWSERS_PATH`, `HERMES_WEB_DIST`, `HERMES_HOME` pre-configured — zero surprise.
+
+**Tradeoff**: If upstream publishes a broken image, we inherit. Mitigation: the 2-session timebox + committed `image:` tag in compose gives us pin-ability later (change `:latest` to a specific digest if a release breaks).
+
+### D68 — Container user UID 10000 (Hermes default), host `data/` chown'd to match
+
+**What**: `./data` on host chown'd to UID 10000. Kept `HERMES_UID=1001` env in compose in case upstream ever respects it (currently doesn't seem to).
+
+**Why**: Hermes's Dockerfile creates a non-root user at UID 10000. Path of least resistance is `chown` the bind-mounted dir to match. Files in `./data` are gitignored anyway — the UID mismatch only matters operationally, not for git.
+
+**Alternative rejected**: switch to a named Docker volume (container-managed, ignores host UID). Bind-mount is more explicit for teardown.
+
+### D69 — Hermes's programmatic interface is `batch_runner.py`, not an HTTP API
+
+**What**: For Phase 2.75 benchmark comparison, we'll call `batch_runner.py` with a JSONL dataset of prompts. Invocation:
+
+```bash
+docker exec factory-hermes /opt/hermes/.venv/bin/python3 /opt/hermes/batch_runner.py \
+  --dataset_file /opt/data/benchmarks.jsonl \
+  --model openrouter/anthropic/claude-haiku-4-5 \
+  --run_name phase-2.75-bench-haiku
+```
+
+**Why**:
+- Hermes is primarily designed as an interactive agent (TUI, Slack, Discord gateways). No first-class HTTP API.
+- `batch_runner.py` is the officially-supported way to run prompts programmatically — output is structured JSONL of results.
+- Avoids scraping the TUI or shimming a fake HTTP server around `hermes chat`.
+
+**Implication for ADOPTING Hermes**: if we move Hermes into production factory use, the integration is via `docker exec ... python3 batch_runner.py`, not HTTP. Paperclip's job dispatcher can spawn containers or exec into a long-running one. Captured as input for the Phase 2.75-D decision matrix.
+
+### D70 — Teardown after 2.75-A discovery; re-start cleanly in 2.75-B
+
+**What**: `docker compose down` after Phase 2.75-A discovery run. `./data/` preserved (bind-mounted, persists on disk even after container removed). Phase 2.75-B restarts from clean state.
+
+**Why**: Discovery-phase container accumulated exploratory state (bundled skills synced, some TUI session logs). Starting benchmark phase from a clean container boundary keeps benchmark results reproducible.
+
+**Reset to deeper baseline**: `sudo rm -rf ./data/ && mkdir data && sudo chown -R 10000:10000 ./data` if we want to nuke skills + memory + everything. For benchmarks, keeping bundled skills is fine — they're upstream-shipped, not accumulated state.
