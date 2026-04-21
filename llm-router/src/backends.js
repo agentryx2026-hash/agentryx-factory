@@ -39,36 +39,36 @@ async function resolveKey(backend, envVarFallback) {
   return process.env[envVarFallback] || null;
 }
 
-export async function callBackend({ backend, model, messages, signal = null, timeoutMs = 60_000 }) {
+export async function callBackend({ backend, model, messages, signal = null, timeoutMs = 60_000, maxTokens = 4096 }) {
   switch (backend) {
     case 'openrouter': {
       const key = await resolveKey(backend, 'OPENROUTER_API_KEY');
-      return callOpenAICompatible(OPENROUTER_BASE, key, model, messages, { signal, timeoutMs });
+      return callOpenAICompatible(OPENROUTER_BASE, key, model, messages, { signal, timeoutMs, maxTokens });
     }
     case 'litellm':
       // Master key for local proxy stays in env — it's infra, not a provider secret.
-      return callOpenAICompatible(LITELLM_BASE, process.env.LITELLM_MASTER_KEY ?? 'sk-litellm-dev', model, messages, { signal, timeoutMs });
+      return callOpenAICompatible(LITELLM_BASE, process.env.LITELLM_MASTER_KEY ?? 'sk-litellm-dev', model, messages, { signal, timeoutMs, maxTokens });
     case 'direct-openai': {
       const key = await resolveKey(backend, 'OPENAI_API_KEY');
-      return callOpenAICompatible('https://api.openai.com/v1', key, model, messages, { signal, timeoutMs });
+      return callOpenAICompatible('https://api.openai.com/v1', key, model, messages, { signal, timeoutMs, maxTokens });
     }
-    case 'direct-anthropic': return callAnthropicDirect(model, messages, { signal, timeoutMs });
-    case 'direct-gemini':    return callGeminiDirect(model, messages, { signal, timeoutMs });
+    case 'direct-anthropic': return callAnthropicDirect(model, messages, { signal, timeoutMs, maxTokens });
+    case 'direct-gemini':    return callGeminiDirect(model, messages, { signal, timeoutMs, maxTokens });
     default:
       throw new Error(`Unknown backend "${backend}". Use one of: openrouter, litellm, direct-openai, direct-anthropic, direct-gemini`);
   }
 }
 
 // ─── OpenAI-format backend (used for openrouter, litellm, direct-openai) ─────
-async function callOpenAICompatible(baseUrl, apiKey, model, messages, { signal, timeoutMs }) {
+async function callOpenAICompatible(baseUrl, apiKey, model, messages, { signal, timeoutMs, maxTokens = 4096 }) {
   if (!apiKey) {
     throw httpError(401, `missing API key for backend at ${baseUrl} — set the corresponding _API_KEY env var`);
   }
   // max_tokens cap: providers like Anthropic-via-OpenRouter reserve credits
-  // upfront based on the cap (not actual usage). Default model max can be 64K
-  // which requires a heavy prepaid balance. 4096 is sane for most factory tasks
-  // and per-task overrides land in 2D.
-  const body = JSON.stringify({ model, messages, stream: false, max_tokens: 4096 });
+  // upfront based on the cap (not actual usage). Default 4096 is sane for most
+  // factory tasks. Phase 3 Genovi overrides via task-config (typical intake
+  // JSON is 500-2000 tokens).
+  const body = JSON.stringify({ model, messages, stream: false, max_tokens: maxTokens });
   const res = await fetchWithTimeout(`${baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
@@ -91,7 +91,7 @@ async function callOpenAICompatible(baseUrl, apiKey, model, messages, { signal, 
 }
 
 // ─── Anthropic Messages API (direct) ─────────────────────────────────────────
-async function callAnthropicDirect(model, messages, { signal, timeoutMs }) {
+async function callAnthropicDirect(model, messages, { signal, timeoutMs, maxTokens = 4096 }) {
   const apiKey = await resolveKey('direct-anthropic', 'ANTHROPIC_API_KEY');
   if (!apiKey) throw httpError(401, 'no anthropic key available — set one in the admin console or export ANTHROPIC_API_KEY');
 
@@ -108,7 +108,7 @@ async function callAnthropicDirect(model, messages, { signal, timeoutMs }) {
     },
     body: JSON.stringify({
       model,
-      max_tokens: 4096,
+      max_tokens: maxTokens,
       system,
       messages: userMessages,
     }),
@@ -127,7 +127,7 @@ async function callAnthropicDirect(model, messages, { signal, timeoutMs }) {
 }
 
 // ─── Gemini (direct) ─────────────────────────────────────────────────────────
-async function callGeminiDirect(model, messages, { signal, timeoutMs }) {
+async function callGeminiDirect(model, messages, { signal, timeoutMs, maxTokens = 4096 }) {
   const apiKey = (await resolveKey('direct-gemini', 'GEMINI_API_KEY')) ?? process.env.GOOGLE_API_KEY;
   if (!apiKey) throw httpError(401, 'no gemini key available — set one in the admin console or export GEMINI_API_KEY');
   const url = `${GEMINI_BASE}/models/${model}:generateContent?key=${apiKey}`;

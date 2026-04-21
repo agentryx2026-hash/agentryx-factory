@@ -21,6 +21,7 @@ export async function complete({
   agent = null,
   modelOverride = null,
   signal = null,
+  maxTokens = null,   // Phase 3: if null, falls back to task config `max_tokens` or global 4096
 }) {
   if (!task) throw new Error('complete(): task is required');
   if (!Array.isArray(messages) || messages.length === 0) {
@@ -72,11 +73,14 @@ export async function complete({
   const attempts = [];
   const startWall = Date.now();
 
+  // max_tokens resolution priority: caller override > task config > global default.
+  const effectiveMaxTokens = maxTokens ?? taskCfg.max_tokens ?? cfg.defaults?.max_tokens ?? 4096;
+
   for (const entry of chain) {
     const [backend, model] = parseEntry(entry);
     const t0 = Date.now();
     try {
-      const result = await callBackend({ backend, model, messages, signal });
+      const result = await callBackend({ backend, model, messages, signal, maxTokens: effectiveMaxTokens });
       const latency_ms = Date.now() - t0;
       const cost_usd = computeCost(model, result.usage);
 

@@ -10,13 +10,14 @@
 import { complete } from './router.js';
 
 export class RouterChatModel {
-  constructor({ task, modelOverride = null, projectId = null, phase = null, agent = null } = {}) {
+  constructor({ task, modelOverride = null, projectId = null, phase = null, agent = null, maxTokens = null } = {}) {
     if (!task) throw new Error('RouterChatModel: task is required (e.g. "architect", "code", "cheap")');
     this.task = task;
     this.modelOverride = modelOverride;
     this.projectId = projectId;
     this.phase = phase;
     this.agent = agent;
+    this.maxTokens = maxTokens;
   }
 
   async invoke(messages, options = {}) {
@@ -32,6 +33,7 @@ export class RouterChatModel {
       phase:     options?.config?.phase     ?? this.phase,
       agent:     options?.config?.agent     ?? this.agent,
       signal:    options?.signal ?? null,
+      maxTokens: options?.config?.maxTokens ?? this.maxTokens,
     });
 
     // Return a LangChain-shaped AIMessage. We don't import AIMessage from

@@ -58,6 +58,17 @@
       "fallbacks": [
         "openrouter:anthropic/claude-sonnet-4-6"
       ]
+    },
+    "intake": {
+      "description": "Raw scope doc (SRS/FRS/PRD/TOR) → structured requirements extraction. Long context, structured JSON output. Genovi agent (Phase 3).",
+      "primary": "openrouter:google/gemini-2.5-flash",
+      "fallbacks": [
+        "openrouter:anthropic/claude-haiku-4-5",
+        "openrouter:google/gemini-2.5-pro",
+        "openrouter:anthropic/claude-sonnet-4-6"
+      ],
+      "max_tokens": 2000,
+      "_comment": "Flash primary because current OpenRouter balance is tight (402 on 4096 tokens for Pro/Sonnet). Extraction JSON fits easily in 2000 tokens. If credit tops up, promote gemini-2.5-pro back to primary for larger scope docs."
     }
   }
 }
