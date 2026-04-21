@@ -1,70 +1,79 @@
 # Phase 2 — Status
 
 **Phase started**: 2026-04-20
-**Last updated**: 2026-04-20
+**Last updated**: 2026-04-21
 
-## Done
+## Subphase progress
 
-### 2A — Router facade package (core files)
-- ✅ Package `@agentryx-factory/llm-router` scaffolded at `llm-router/`
-- ✅ 4 backends implemented: `openrouter`, `litellm` (HTTP client ready, container in 2D), `direct-anthropic`, `direct-gemini`
-- ✅ Unified OpenAI Chat Completions protocol (~50 LOC per backend)
-- ✅ `complete({task, messages})` → picks fallback chain from task config → iterates
-- ✅ `compare({messages, models})` → parallel N-model comparison for debug/eval
-- ✅ `health()` → per-backend ping, graceful when key missing
-- ✅ Cost computation from `configs/llm-prices.json` (9 models)
-- ✅ Task config at `configs/llm-routing.json` (6 tasks: triage / cheap / worker / code / architect / research)
-- ✅ LLM_CALL telemetry rows emitted to stderr (Phase 2C replaces with Postgres)
+| Sub | Status | Commit |
+|---|---|---|
+| 2A — Router facade package | ✅ COMPLETE | `dc6546b`, `54efec9` |
+| 2B — LangChain adapter + cognitive-engine swap | ✅ COMPLETE | `c482248`, `50be3f2` |
+| 2C — Postgres cost capture | ✅ COMPLETE | `d2a8430` |
+| 2D — LiteLLM container + activate router on telemetry | 🟡 in progress | — |
+| 2E — Pre-call budget caps | ⏳ pending | — |
+| 2F — Compare mode CLI | ⏳ pending | — |
+| 2G — Cost panel in dashboard | ⏳ pending | — |
 
-### Phase docs
-- ✅ Phase_02_Plan.md active with full subphase breakdown
-- ✅ Phase_02_Decisions.md with D12-D17 (protocol, backends, LangChain, backend priority, price table, fail-open)
+## What's live and verified
 
-### Tested
-- ✅ All JS files parse clean
-- ✅ Config loader: 6 tasks + 9 prices indexed
-- ✅ Health check: returns `{}` gracefully when no keys
-- ✅ End-to-end call: architect fallback chain iterated 4 models (OpenRouter × 3, direct-Anthropic × 1), all 4 failures captured cleanly, structured error with `attempts` array
-- ✅ Behavior-fix during test: moved from "retryable statuses" to "payload-fatal statuses" so 401/billing-400 correctly fall over to next chain entry
+### Code shipped
+- `llm-router/` package — 4 source files, 1 migration, configs, README
+- `pg ^8.13.0` installed in `llm-router/node_modules/`
+- Symlink `cognitive-engine/node_modules/@agentryx-factory/llm-router` → real package
+- 4 cognitive-engine graphs patched with `USE_ROUTER` env switch (snapshot in `cognitive-engine-snapshot/`)
 
-### Bug caught during test
-- `retry` logic originally treated 4xx as non-retryable (broke chain on first 401). Now: only 413/414/415/422 (payload shape errors) break the chain. Everything else falls over. Rationale: auth/billing/rate-limit are per-backend; next entry may use a different backend with a valid key.
+### Database
+- `llm_calls` table created in `factory-postgres` (pixel_factory database)
+- 4 indexes: `ts DESC`, `project_id`, `agent`, `model_succeeded`
+- View `llm_cost_by_project_day` for the Phase 2G dashboard
+- Verified: 1 row from smoke test (`phase-2c-smoke` / `self-test` / Haiku via OpenRouter / $0.000044 / 1361ms)
 
-## Current blocker — provider keys (GitHub issue #4)
+### Tested live
+- ✅ All 6 task tiers route correctly per `configs/llm-routing.json`
+- ✅ Fallback chain walks 4 entries on auth/credit failures
+- ✅ Both backends working: `direct-anthropic` ($0.000028) + `openrouter:anthropic/claude-haiku-4-5` ($0.000026) + `openrouter:google/gemini-2.5-flash` ($0.000001)
+- ✅ Router accessible from cognitive-engine via clean import
+- ✅ Default behavior preserved when `USE_ROUTER` unset (verified by loading dev_graph.js without env var)
+- ✅ Cost row hits Postgres on every successful call
 
-Router is fully functional but needs at least ONE working provider key to make a real call. Available options:
+## Blocker resolution
 
-- **Anthropic** — key on disk works (confirmed: made round trip). But account has $0 credit. Options: (a) add $10-20 credit for testing; (b) use a different provider while we bring up the router.
-- **OpenRouter** — single key gives access to ~100 models including Claude/GPT/Gemini with pay-as-you-go. Recommend this — unblocks all 6 task tiers at once.
-- **Gemini (paid)** — different key than the one in `paperclip/.env`? The router has a `direct-gemini` backend ready.
-- **OpenAI** — GPT-5 family via direct or OpenRouter.
+| Was | Now |
+|---|---|
+| Anthropic key — leaked twice (Phase 2A) | Rotated; current key in `.env`, $0 balance — usable for round-trip but not real workloads |
+| OpenRouter key — needed | Provided by user, working, has credit. Used for live smoke tests. |
+| Provider keys generally (issue #4) | Resolved via OpenRouter aggregator. Single key, multi-provider access. |
 
-Minimal viable set to unblock: **OpenRouter key** OR **Anthropic credit top-up**.
+## Up next — Phase 2D plan
 
-## Up next
+### 2D-1: LiteLLM service container
+- Add to `deploy/docker-compose.yml`: `litellm` service, image `ghcr.io/berriai/litellm:main`, port 4000, mounts `~/.litellm-config.yaml`.
+- Initial config: passthroughs for the same providers we use via OpenRouter (Anthropic, OpenAI, Google, DeepSeek). Provider keys read from env (NOT in YAML — committable).
+- Health check: `curl http://localhost:4000/health` returns `{"status":"healthy"}`.
+- Volumes: persist nothing (LiteLLM is stateless).
 
-### 2B — LangChain adapter (in progress pending reviewer decision)
+### 2D-2: Backend switcher env
+- `LLM_ROUTER_BACKEND` env var picks default backend when chain entries don't specify one (e.g. bare `claude-opus-4-7` instead of `openrouter:claude-opus-4-7`).
+- Document in `configs/README.md` + `llm-router/README.md`.
+- Default stays `openrouter` (works without LiteLLM running).
 
-`cognitive-engine/factory_graph.js` and siblings instantiate `ChatGoogleGenerativeAI` directly. 2B builds a `RouterChatModel` class compatible with LangChain's `BaseChatModel` interface so graphs swap `new ChatGoogleGenerativeAI({...})` for `new RouterChatModel({task: 'architect'})` with no other changes.
+### 2D-3: Activate router on factory-telemetry.service
+- Add `Environment=USE_ROUTER=true` to `deploy/systemd/factory-telemetry.service`.
+- Add `EnvironmentFile=-/home/subhash.thakur.india/Projects/claw-code-parity/.env` so OpenRouter key is in scope.
+- `systemctl daemon-reload && systemctl restart factory-telemetry`.
+- Smoke test: trigger one cognitive-engine spawn, verify cost row appears in `llm_calls`.
 
-No user input needed to start 2B. Can proceed in parallel with user providing provider keys.
+### 2D-4: Update Phase_02_Decisions.md DURING execution
+- Capture each non-obvious choice as I go (not retroactively).
+- Catch up at end of every subphase, not end of full phase.
 
-### 2C — Postgres cost capture
+## Process discipline (added 2026-04-21 per user feedback)
 
-Single migration file + `db.js` module. Replaces the stderr `LLM_CALL` emit with a Postgres INSERT. Fail-open (if DB down, still log to stderr). Also enables Phase 2E budget caps.
+Going forward in Phase 2:
+1. **Before** each subphase: expand the subphase plan in this file (or a dedicated note) with the actual approach + any open questions.
+2. **During**: capture decisions inline in `Phase_02_Decisions.md` (one entry per non-obvious choice).
+3. **After** each subphase: update this Status file with what shipped + commit hash.
+4. **At phase close**: write `Phase_02_Lessons.md` properly.
 
-### 2D — Config switcher + LiteLLM container
-
-Add LiteLLM service to `deploy/docker-compose.yml`, wire `LLM_ROUTER_BACKEND` env var switch.
-
-### 2E — Budget caps
-
-Pre-call check `SELECT SUM(cost_usd) FROM llm_calls WHERE project_id = ? AND ts > today` against `max_project_budget_usd` / `max_daily_budget_usd` from routing config defaults.
-
-### 2F — Compare mode UI
-
-CLI: `npm run compare -- --task=architect --models=opus,gpt-5,gemini-pro --prompt="..."`. Feeds architecture decisions for v1.0.
-
-### 2G — Cost panel
-
-Simple SQL-backed table view in dashboard. Read-only (write path is Phase 12 admin module).
+The earlier subphases (2A/2B/2C) had this done partly in commit messages; D17.1, D17.2, D18-D25 backfilled into Decisions on 2026-04-21 to close the gap.

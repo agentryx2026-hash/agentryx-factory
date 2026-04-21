@@ -51,3 +51,89 @@
 **Why**: An outage in observability should not take down production LLM calls. We accept occasional lost rows as the tradeoff.
 
 **Exception**: Budget cap check. That IS synchronous — if we can't read past spend, we fail-closed (refuse the call) to avoid runaway cost. Admin can override with an env var `LLM_ROUTER_ALLOW_UNCHECKED=true` (off by default).
+
+---
+
+## Decisions made during Phase 2A execution
+
+### D17.1 — Cap `max_tokens` at 4096 in OpenAI-compatible backends
+
+**What**: All `/chat/completions` POSTs include `max_tokens: 4096` even if caller doesn't specify.
+
+**Why**: Discovered during 2A smoke test — OpenRouter pre-reserves credit at the model's default ceiling (64K for Claude Haiku). Tiny replies were failing with `402 insufficient credits` on accounts with $1+ balance. 4096 is sane for most factory tasks. Per-task overrides land in 2D.
+
+**Future**: Add `max_tokens` to per-task config so e.g. `architect` can use 16K and `cheap` stays at 2K.
+
+### D17.2 — Fall-over semantics: only payload-shape 4xx breaks the chain
+
+**What**: Original retry logic broke the chain on any 4xx (treating it as "non-retryable"). Now only `413/414/415/422` (payload too large, URI too long, unsupported media, unprocessable entity) break the chain. Everything else — `401/402/403/429/5xx` — falls over to the next entry.
+
+**Why**: 401 (auth) and 402 (billing) are per-backend. A 401 from `direct-anthropic` doesn't predict failure on `openrouter:anthropic/...`. The next entry might use a totally different key + provider. So fall over.
+
+**Caught by**: 2A smoke test — first chain run failed with 401 from openrouter (no key set yet) but the chain stopped instead of trying `direct-anthropic` which had a valid key. Fixed in commit `dc6546b`.
+
+---
+
+## Phase 2B Decisions
+
+### D18 — Duck-type LangChain interface, don't extend `BaseChatModel`
+
+**What**: `RouterChatModel` implements `.invoke()`, `.call()`, `._llmType()`, `.withTask()`, `.withContext()` but does NOT extend any LangChain class.
+
+**Why**:
+1. Zero-dep on LangChain — adapter ships with the router package, no peer-dependency war.
+2. `BaseChatModel` is a moving target across LangChain versions. Duck typing pins us only to the surface we actually use.
+3. Simpler — ~50 LOC instead of 200+ for full interface.
+
+**Tradeoff**: Lose access to LangChain's `RunnableLambda` chaining and built-in tracing. Acceptable at v0.0.1; if needed, swap to subclassing later — won't break existing call sites.
+
+### D19 — Symlink `llm-router` into `cognitive-engine/node_modules/@agentryx-factory/`
+
+**What**: One-liner `ln -s` makes `import { RouterChatModel } from '@agentryx-factory/llm-router'` resolve cleanly from cognitive-engine, without setting up workspaces or publishing to a registry.
+
+**Why**: cognitive-engine isn't yet inside the mono-repo (Phase 1.5 will fold it in). Symlink is the lowest-friction integration that keeps imports stable across the migration. The same import path works before and after Phase 1.5 — only the symlink target changes.
+
+### D20 — `USE_ROUTER` as a third option, NOT a replacement
+
+**What**: Each cognitive-engine graph now has 3 model paths controlled by env vars: `USE_ROUTER=true` (router), `USE_ANTIGRAVITY_BRIDGE=true` (filesystem bridge), default (direct Gemini). All three coexist.
+
+**Why**: Configurability principle. We're at v0.0.1 R&D — we want to compare all three approaches on the same workload. Defaulting `USE_ROUTER=true` would silently switch the system over and lose the comparison.
+
+### D21 — Dynamic import for the router so default path stays zero-risk
+
+**What**: `let RouterChatModel; if (USE_ROUTER) ({ RouterChatModel } = await import('@agentryx-factory/llm-router'));` — only loads the package when the env var is set.
+
+**Why**: If router has any bug at module-init time (bad import, missing dep), the default `USE_ROUTER=false` path is completely unaffected. Dev_graph.js loads identically to its pre-2B state when router is off.
+
+---
+
+## Phase 2C Decisions
+
+### D22 — `pg` becomes the router's first runtime dependency
+
+**What**: `llm-router/package.json` now depends on `pg ^8.13.0`. Brought 14 transitive deps.
+
+**Why**: Couldn't avoid it — Postgres is the cost store. Considered:
+- Native `node-postgres` via raw socket (would have to write protocol parser; absurd).
+- Wrap an HTTP layer (PostgREST, etc.) — adds a service hop and operational burden.
+- `pg` is the standard, battle-tested. 14 deps is acceptable.
+
+**Future cleanup**: If we ever package router for distribution to environments without Postgres, gate `pg` behind a peer-dep + lazy import. Not needed for v0.0.1.
+
+### D23 — 2-second timeout on the cost-capture INSERT
+
+**What**: `Promise.race(insert, sleep(2000))` in `db.js` so a slow Postgres can't delay completions noticeably.
+
+**Why**: Average INSERT to a healthy local Postgres is <5ms; if it takes >2s something is wrong (lock contention, network blip). At 2s, the user-visible LLM call latency would noticeably increase. Better to drop the row to stderr fallback and keep the agent responsive.
+
+### D24 — `projectSpendSinceMidnight()` lives in `db.js`, not as Phase 2E code
+
+**What**: The function that the budget-cap check (Phase 2E) will call already exists in `llm-router/src/db.js`.
+
+**Why**: Keep all Postgres interactions inside the router package. Phase 2E only adds the call site, not the query. This makes the router a self-contained unit — downstream code (cognitive-engine, dashboard) never opens a Postgres connection just to ask about LLM cost.
+
+### D25 — `llm_cost_by_project_day` view ships with the migration
+
+**What**: View created in `001-llm-calls.sql` aggregates project × day → cost / calls / tokens / latency.
+
+**Why**: The Phase 2G dashboard panel reads from this view, not from `llm_calls` directly. Adding the view in the same migration keeps schema cohesive — anyone who has the table also has the view. Dashboard doesn't need to know how the aggregation works.
