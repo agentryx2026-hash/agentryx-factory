@@ -1,6 +1,7 @@
-# Phase 2 — Status
+# Phase 2 — Status: COMPLETE ✅
 
 **Phase started**: 2026-04-20
+**Phase closed**:  2026-04-21
 **Last updated**: 2026-04-21
 
 ## Subphase progress
@@ -11,7 +12,11 @@
 | 2B — LangChain adapter + cognitive-engine swap | ✅ COMPLETE | `c482248`, `50be3f2` |
 | 2C — Postgres cost capture | ✅ COMPLETE | `d2a8430` |
 | 2D — LiteLLM container + activate router on telemetry | ✅ COMPLETE | `19932f6` |
-| 2E — Pre-call budget caps | ✅ COMPLETE | *(this commit)* |
+| 2.5 — Key Console (B7-lite, inserted) | ✅ COMPLETE | `22fca9f` |
+| 2E — Pre-call budget caps | ✅ COMPLETE | `6a65b6f` |
+| 2F — Compare-mode CLI | ✅ COMPLETE | `a843e49` |
+| 2G — Cost panel UI | ✅ COMPLETE | `43b3171` |
+| 2 close | Lessons + milestone | *(this commit)* |
 | 2F — Compare mode CLI | ⏳ pending | — |
 | 2G — Cost panel in dashboard | ⏳ pending | — |
 
