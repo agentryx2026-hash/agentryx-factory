@@ -180,10 +180,45 @@ const server = http.createServer((req, res) => {
         const payloadStr = Buffer.concat(body).toString('utf-8');
         const payload = JSON.parse(payloadStr);
         let finalTask = payload.task || '';
-        
+
         if (payload.projectName && payload.projectName.trim() !== '') {
           finalTask = `PROJECT_NAME: ${payload.projectName.trim()}\n\n` + finalTask;
         }
+
+        // Phase 4 — feature-flagged alternative path: spawn pre_dev_graph.js
+        // (real LLM pipeline incl. Genovi intake) instead of the inline
+        // template substitution below. Default off; flip PRE_DEV_USE_GRAPH=true
+        // in env (or systemd unit) when OpenRouter credit is sufficient for
+        // a full pipeline run (~\$0.50-\$2.00 per invocation).
+        if (process.env.PRE_DEV_USE_GRAPH === 'true') {
+          addLog('system', `🖖 Pre-Dev Pipeline engaged via cognitive-engine graph (real LLM)`);
+          broadcast();
+          const child = spawn('node', ['/home/subhash.thakur.india/Projects/agentryx-factory/cognitive-engine/pre_dev_graph.js', finalTask], {
+            cwd: '/home/subhash.thakur.india/Projects/agentryx-factory/cognitive-engine',
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env },
+          });
+          child.stdout.on('data', (data) => {
+            const line = data.toString().trim();
+            if (line) { addLog('system', line.substring(0, 120)); broadcast(); }
+          });
+          child.stderr.on('data', (data) => {
+            const line = data.toString().trim();
+            if (line && !line.includes('ExperimentalWarning')) {
+              addLog('system', `⚠️ ${line.substring(0, 120)}`);
+              broadcast();
+            }
+          });
+          child.on('close', (code) => {
+            addLog('system', code === 0 ? '✅ Pre-Dev graph complete (real docs via LLM).' : `❌ Pre-Dev graph exited with code ${code}`);
+            broadcast();
+          });
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ success: true, message: 'Pre-Dev pipeline engaged via cognitive-engine graph', mode: 'graph' }));
+          return;
+        }
+        // Default path (template substitution) continues below — preserved for
+        // credit-constrained operation and instant UI feedback during demos.
 
         if (payload.files && payload.files.length > 0) {
           addLog('system', `📥 Received ${payload.files.length} supplementary documents. Parsing...`);

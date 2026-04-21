@@ -65,6 +65,42 @@ async function parseAndWriteFiles(responseContent, pmdDocs, agentId) {
 
 // ── 3. AGENT NODES ───────────────────────────────────────
 
+// GENOVI — Intake (Phase 3/4). Takes raw scope text → structured requirement
+// extraction JSON. Runs FIRST so downstream agents can use the structured
+// extraction. Populates state.pmdDocs._raw_extraction.
+//
+// Non-fatal: if Genovi errors (bad API key, schema mismatch), we log and
+// continue — downstream agents fall back to raw userRequest.
+async function genoviNode(state) {
+  await broadcastTelemetry('genovi', 0, 'working', '🔍 Genovi extracting structured requirements from raw scope...');
+  try {
+    const { runGenovi } = await import('./genovi.js');
+    const result = await runGenovi({
+      rawScopeText: state.userRequest,
+      projectId: state._projectDir || 'pending-picard-scope',
+      // Do NOT pass projectDir — Picard still owns writing A0_Source_Analysis.md.
+      // Genovi's contribution is the structured JSON in state, available to all downstream.
+    });
+    await broadcastTelemetry(
+      'genovi',
+      0,
+      'idle',
+      `✅ Genovi: ${result.extracted.functional_requirements.length} FRs · domain=${result.extracted.domain} · complexity=${result.extracted.estimated_complexity}`
+    );
+    return {
+      pmdDocs: {
+        ...state.pmdDocs,
+        _raw_extraction: result.extracted,
+      },
+    };
+  } catch (err) {
+    console.error('[genovi] extraction failed (non-fatal):', err.message);
+    await broadcastTelemetry('genovi', 0, 'idle', `⚠️ Genovi failed (${err.message.substring(0, 80)}) — continuing with raw scope`);
+    // Fall through — downstream agents read state.userRequest directly.
+    return {};
+  }
+}
+
 // PICARD — Solution Architect: A0 Source Analysis + A1 Brief + A2 Architecture
 async function picardScopeNode(state) {
   const taskId = `SCOPE-${Date.now().toString(36).toUpperCase()}`;
@@ -353,6 +389,7 @@ Output as FILE BLOCK:
 // ── 4. BUILD THE GRAPH ───────────────────────────────────
 
 const workflow = new StateGraph(PreDevState)
+  .addNode('genovi', genoviNode)
   .addNode('picard_scope', picardScopeNode)
   .addNode('sisko', siskoNode)
   .addNode('picard_a6', picardA6Node)
@@ -360,7 +397,8 @@ const workflow = new StateGraph(PreDevState)
   .addNode('obrien_infra', obrienInfraNode)
   .addNode('picard_p0', picardP0Node)
   .addNode('jane_init', janeInitNode)
-  .addEdge('__start__', 'picard_scope')
+  .addEdge('__start__', 'genovi')
+  .addEdge('genovi', 'picard_scope')
   .addEdge('picard_scope', 'sisko')
   .addEdge('sisko', 'picard_a6')
   .addEdge('picard_a6', 'troi')
@@ -385,7 +423,7 @@ async function main() {
   console.log(`📋 Scope: ${task.substring(0, 150)}...`);
   console.log('═══════════════════════════════════════════════════');
   console.log('');
-  console.log('Pipeline: Picard(A0+A1+A2) → Sisko(A3+A4+A5) → Picard(A6) → Troi(B4+B6) → O\'Brien(B8) → Picard(P0) → Jane(AGENT_STATE)');
+  console.log('Pipeline: Genovi(intake) → Picard(A0+A1+A2) → Sisko(A3+A4+A5) → Picard(A6) → Troi(B4+B6) → O\'Brien(B8) → Picard(P0) → Jane(AGENT_STATE)');
   console.log('');
 
   const result = await preDevGraph.invoke({
