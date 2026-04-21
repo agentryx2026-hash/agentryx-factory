@@ -21,14 +21,14 @@ For the long-term vision (what R4/R5 looks like), see **[../Master_Factory_Archi
 |---|---|---|---|
 | 0 | **GitHub setup** | Fresh `agentryx-factory` repo, structure, labels, milestones, Project board | ✅ done |
 | 1 | [Restore and Observe](Phase_01_Restore_and_Observe/Phase_01_Plan.md) | Get current pipeline alive, instrumented, repeatable on any VM | ✅ done |
-| 1.5 | [Rename and Monorepo](Phase_1.5_Rename_and_Monorepo/Phase_1.5_Plan.md) | Rename repo to `agentryx-dev-factory`, migrate `pixel-factory-ui` → `factory-dashboard`, fold cognitive-engine into monorepo, + tool links in sidebar + Paperclip UI exposed | sketched |
+| 1.5 | [Rename and Monorepo](Phase_1.5_Rename_and_Monorepo/Phase_1.5_Plan.md) | Rename repo to `agentryx-dev-factory`, migrate `pixel-factory-ui` → `factory-dashboard`, fold cognitive-engine into monorepo, + tool links in sidebar + Paperclip UI exposed | ✅ done |
 | 2 | [LLM Router and Cost Telemetry](Phase_02_LLM_Router/Phase_02_Plan.md) | LiteLLM + OpenRouter, switchable; per-task model assignment; per-call $ captured; Key Console (2.5) inserted mid-phase; fallback chain; compare mode; cost panel | ✅ done |
 | 2.5 | [Key Console (B7-lite)](Phase_2.5_Key_Console/Phase_2.5_Plan.md) | Inserted mid-Phase-2 after 6 secret-leak incidents. Browser-based provider-key management, AES-256-GCM at rest, audit log. | ✅ done |
 | 2.75 | [Hermes Agent Evaluation](Phase_2.75_Hermes_Evaluation/Phase_2.75_Plan.md) | Evaluated [Nous Research Hermes](https://github.com/nousresearch/hermes-agent). **Verdict: hybrid adoption** — Hermes for Courier (Ph10) + agentskills (Ph18); Hermes patterns for Memory (Ph7) + Self-improve (Ph15); LangGraph stays as primary agent runtime. Saves ~4 weeks across downstream phases. | ✅ done |
-| 3 | [Intake Stage (Genovi)](Phase_03_Intake_Genovi/Phase_03_Plan.md) | New first agent. SRS/FRS/PRD → structured requirement extraction | one-liner |
-| 4 | [PMD Template Registry](Phase_04_PMD_Template_Registry/Phase_04_Plan.md) | Formalize 25-30 standard docs as versioned templates with dependency graph | one-liner |
-| 5 | [MCP Tool Plane](Phase_05_MCP_Tool_Plane/Phase_05_Plan.md) | Replace custom `tools.js` with MCP servers (fs, git, github, postgres, browser) | one-liner |
-| 6 | [Artifact-First State](Phase_06_Artifact_First_State/Phase_06_Plan.md) | Typed outputs (PMD/code/test/doc) to versioned artifact store | one-liner |
+| 3 | [Intake Stage (Genovi)](Phase_03_Intake_Genovi/Phase_03_Plan.md) | New first agent. SRS/FRS/PRD → structured requirement extraction | ✅ done |
+| 4 | [PMD Template Registry](Phase_04_PMD_Template_Registry/Phase_04_Plan.md) | Formalize 25-30 standard docs as versioned templates with dependency graph | ✅ done |
+| 5 | [MCP Tool Plane](Phase_05_MCP_Tool_Plane/Phase_05_Plan.md) | Replace custom `tools.js` with MCP servers (fs, git, github, postgres, browser) | 🟡 5-A done (scaffolding); 5-B deferred (graph integration, needs OpenRouter credit) |
+| 6 | [Artifact-First State](Phase_06_Artifact_First_State/Phase_06_Plan.md) | Typed outputs (PMD/code/test/doc) to versioned artifact store | 🟡 6-A done (scaffolding); 6-B deferred (graph dual-write, needs OpenRouter credit) |
 | 7 | [Memory Layer v1](Phase_07_Memory_Layer/Phase_07_Plan.md) | Obsidian vault (human-curated) + vector index (auto) hybrid | one-liner |
 | 8 | [Parallel Artifacts](Phase_08_Parallel_Artifacts/Phase_08_Plan.md) | Restructure graph: code/tests/docs as concurrent branches under fan-out/join | one-liner |
 | 9 | [Verification Queue (Verify integration)](Phase_09_Verification_Queue/Phase_09_Plan.md) | Stand up Verify portal; factory pushes test cases; humans approve/reject; feedback loops back | one-liner |
@@ -72,3 +72,19 @@ Each `Phase_NN_*/` folder contains four files:
 | `Phase_NN_Lessons.md` | Post-mortem — filled at phase close, feeds future phases |
 
 Status / Decisions / Lessons files are created when a phase moves from sketch → active.
+
+## Git workflow (adopted 2026-04-21 during Phase 5-A)
+
+Every phase from 5-A onwards uses PR flow, not direct-to-main.
+
+1. **Branch off main**: `git checkout -b phase/<n>-<slug> main`
+2. **Commit + push branch**: `git push -u origin phase/<n>-<slug>`
+3. **Open PR**: `gh pr create --base main --head phase/<n>-<slug> --title "..." --body "..."` with Summary + Test plan + Rollback sections.
+4. **Link to milestone**: `gh api repos/:owner/:repo/issues/<pr#> -X PATCH -f milestone=<n>`
+5. **Merge (squash)**: `gh pr merge <pr#> --squash --delete-branch` — one commit per phase on main, branch auto-deleted.
+6. **Tag**: `git tag -a phase-<n>-closed <sha> -m "..." && git push origin phase-<n>-closed`
+7. **Sync local**: `git checkout main && git pull --ff-only origin main && git fetch --prune origin`
+
+**Why**: Review gate + rollback discipline + parallel experimentation. Aligns with Master_Factory_Architect.md P9 (release-band versioning).
+
+**Phase tags (8 retroactive + 2 new)**: `phase-0-baseline`, `phase-1-closed`, `phase-1.5-closed`, `phase-2-closed`, `phase-2.5-closed`, `phase-2.75-closed`, `phase-3-closed`, `phase-4-closed`, `phase-5a-closed`, `phase-6a-closed`.
