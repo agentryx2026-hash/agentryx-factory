@@ -23,8 +23,11 @@ Drop SRS / FRS / PRD documents → factory produces production-ready software wi
 | `deploy/` | Systemd units, nginx vhosts, restore.sh — runtime config versioned here, symlinked into `/etc/` |
 | `configs/` | Templates of `.env`, `openclaw.json`, etc. **No secrets.** |
 | `docs/` | Runbooks, ops guides, troubleshooting |
-| `factory-dashboard/` | *(Phase 1.5 import)* Vite + React dashboard. Currently at `~/Projects/pixel-factory-ui/`. |
-| `cognitive-engine/` | *(Phase 1.5 import)* LangGraph runner. Currently at `~/Projects/cognitive-engine/`. |
+| `factory-dashboard/` | Vite + React dashboard (imported into monorepo in Phase 1.5). |
+| `cognitive-engine/` | LangGraph runner + Genovi (Phase 3) + MCP tool plane (Phase 5-A) + artifact store (Phase 6-A). |
+| `llm-router/` | Multi-provider LLM router with fallback chains + cost capture (Phase 2). |
+| `hermes/` | Nous Research Hermes Agent (evaluated Phase 2.75, hybrid adoption for Courier/skills). |
+| `server/` | Admin API (Key Console backend, Phase 2.5). |
 
 ## External components (separate repos, by design)
 
@@ -35,11 +38,21 @@ Drop SRS / FRS / PRD documents → factory produces production-ready software wi
 | `openclaw` | upstream fork | Same |
 | Verify portal | *TBD* | Standalone application; this factory **integrates** with it |
 
-## Current phase
+## Current progress
 
-**Phase 1 — Restore + Observe**.
+As of 2026-04-21:
 
-See [pmd/Agentryx Dev Plan/D.Roadmap/Phase_01_Restore_and_Observe/Phase_01_Status.md](pmd/Agentryx%20Dev%20Plan/D.Roadmap/Phase_01_Restore_and_Observe/Phase_01_Status.md) for live status.
+| Band | Closed phases | In progress | Deferred |
+|---|---|---|---|
+| Foundation | 0, 1, 1.5, 2, 2.5, 2.75, 3, 4, 5-A, 6-A | Phase 7 (Memory Layer) next | 5-B, 6-B (need OpenRouter credit for E2E) |
+
+Phase tags on main (rollback anchors): `phase-0-baseline`, `phase-1-closed`, `phase-1.5-closed`, `phase-2-closed`, `phase-2.5-closed`, `phase-2.75-closed`, `phase-3-closed`, `phase-4-closed`, `phase-5a-closed`, `phase-6a-closed`.
+
+See [pmd/Agentryx Dev Plan/D.Roadmap/README.md](pmd/Agentryx%20Dev%20Plan/D.Roadmap/README.md) for the full roadmap and per-phase status.
+
+## Git workflow
+
+All phases from 5-A onwards ship via PR flow (branch → push → `gh pr create` → squash-merge → tag as `phase-<n>-closed`). Never direct-push to `main`. See roadmap README's "Git workflow" section for the full sequence.
 
 ## Authoritative source
 
