@@ -22,6 +22,14 @@ Phase 10 implementation (revised):
 
 **Saves ~2 weeks** vs custom-building 6 messaging integrations.
 
+**Configurability hook** (per `Master_Factory_Architect.md` §6): Courier ships behind a `CommsService` interface. Implementations:
+- `hermes-gateway` — R1 default, Nous Research Hermes in gateway mode
+- `custom-messaging-adapter` — R4 evolution if Hermes shows cost/control/multi-tenancy issues
+- `email-only` — minimal fallback mode for deployments without multi-channel infra
+- `null` — disable outbound comms entirely (factory runs silent)
+
+Admin UI sets `comms_backend` per tenant. Default is `hermes-gateway`.
+
 ## Config needed (Phase 10 execution time)
 
 - GitHub App install (for PR ops) — one-time user setup
