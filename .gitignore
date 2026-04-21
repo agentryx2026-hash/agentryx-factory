@@ -73,10 +73,24 @@ Anthropic-Key
 **/*-PAT
 **/*-Secret
 
-# Catch keys/tokens anywhere in basename (file 'Claude Key-Open-Router'
-# slipped past *-Key/*-Token because it doesn't end with those suffixes).
-**/*[Kk]ey*
-**/*[Tt]oken*
-**/*[Ss]ecret*
-**/*[Cc]redential*
-!**/node_modules/**
+# Surgical secret-file patterns. Earlier broad pattern **/*[Kk]ey* swallowed
+# legitimate code (keys.js, 002-provider-keys.sql, Phase_2.5_Key_Console/).
+# Rule of thumb here: only match files that look LIKE secrets, not files
+# ABOUT secrets.
+#
+# 1) No-extension files containing token-shaped words (typical of pasted-key
+#    files saved by humans without thinking about extensions).
+**/*-Key
+**/*-Token
+**/*-PAT
+**/*-Secret
+**/*-Credentials
+**/Git-PAT*
+**/Anthropic-Key*
+**/Claude*Key*
+**/*Open*Router*Key*
+**/factory-master-key
+# 2) Common "secrets file" basenames regardless of extension.
+**/secrets.txt
+**/credentials.txt
+**/*.secret
