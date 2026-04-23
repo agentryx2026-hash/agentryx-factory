@@ -1,0 +1,60 @@
+# Phase 14 — Decisions Log
+
+## D136 — Filesystem-backed JSONL queue, not Redis/SQLite
+
+**What**: Jobs stored as one JSON file per state directory under `<workspace_root>/_jobs/`. State transitions are atomic file writes + unlinks.
+
+**Why**:
+- **Zero dependencies**: works on every factory VM with no extra services to deploy.
+- **Debuggable via `ls`**: ops can inspect queue state without admin tools. `ls _jobs/queue/` shows pending, `_jobs/in-flight/` shows what workers are doing.
+- **POSIX rename atomicity**: same-filesystem rename is atomic, so two workers racing to lease the same job → exactly one succeeds. Other gets ENOENT/EEXIST and tries the next.
+- **Persistent across restarts**: queue survives process crashes. (Crash recovery — re-leasing orphan in-flight — is a 14-B concern.)
+- **Phase 11-A pattern alignment**: same one-file-per-record approach as artifact store and memory layer. Consistent mental model.
+
+**Tradeoff**: not horizontally scalable across hosts. Acceptable for v0.0.1 single-VM factory; Phase 20 (Public Release) would migrate to Redis or a real queue service if needed.
+
+## D137 — In-process async workers, not OS processes
+
+**What**: `runSchedulerOnce` spawns N async functions ("workers") in the same Node process. They share memory, share modules, share the event loop.
+
+**Why**:
+- **Sufficient isolation for the substrate**: each job gets its own working directory and project_id stamp; conflicts are at the data layer, not memory.
+- **Simpler to test**: no subprocess teardown, no IPC, no signal handling.
+- **Existing graph code is heavy on CPU-bound work in subprocesses already**: when 14-B registers real handlers, the handler will spawn `pre_dev_graph.js` as a child process anyway. The in-process worker just orchestrates.
+- **OS-process worker pool deferred to 14-B (or later)**: easy upgrade — wrap each `workerLoop` in a worker_threads or child_process boundary. Engine API stays the same.
+
+**Tradeoff**: a runaway handler can OOM the whole pool. 14-B can mitigate via subprocess wrapping or memory limits.
+
+## D138 — Round-robin per-project as default scheduling policy
+
+**What**: Default policy is `round_robin`. Tracked via `servedCounts: Map<project_id, number>` updated at lease time.
+
+**Why**:
+- **Fairness against starvation**: one project enqueueing 100 jobs shouldn't block others. Round-robin guarantees every project with queued work gets attention before any project gets a second turn.
+- **Simple to reason about**: pick project with smallest `servedCounts` value, ties broken by oldest queued job. Two-line ordering.
+- **Switchable to fifo or priority via config**: P1 (configurability) — operators with different needs can change without code edit.
+- **Bug discovery payoff**: initial implementation used "oldest-bucket-first" which silently degraded to fifo. Adding `servedCounts` made the round-robin behavior real and testable.
+
+**Tradeoff**: doesn't account for job size or cost. A project with 100 cheap jobs gets the same share as a project with 100 expensive jobs. Phase 14-B can add weighted round-robin if cost-aware fairness becomes important.
+
+## D139 — Handler registry as dependency injection
+
+**What**: Handlers registered via `registry.register(kind, handlerFn)`. Scheduler invokes `registry.get(kind)` per job. No global registration, no module-level side effects.
+
+**Why**:
+- **Same pattern as Phase 9-A `fixRouter` and Phase 13-A `nodeStubs`**: established convention across phases. Tests register stubs; production registers real handlers.
+- **Explicit dependencies**: looking at a `runSchedulerOnce` call, you see exactly which handlers it has access to. No hidden registration order surprises.
+- **Easy to test in isolation**: smoke test creates a fresh registry, registers exactly one stub, and verifies behavior. No teardown needed.
+- **Multi-tenant or per-environment registries possible**: 14-B may want separate registries per tenant (different job kinds available per customer). Constructor pattern supports this trivially.
+
+## D140 — Per-job working directory under `<workspace>/_jobs/work/<JOB-id>/`
+
+**What**: Before invoking a handler, scheduler creates `<workspace>/_jobs/work/<JOB-id>/` and passes its path as `ctx.workingDir`.
+
+**Why**:
+- **Isolation**: handler can `cd` into this directory and dump intermediate files without colliding with other concurrent jobs.
+- **Inspectable**: ops can `ls _jobs/work/JOB-0042/` to see what a job produced. After cleanup (14-B policy), older work dirs can be archived or deleted.
+- **Contract for 14-B handlers**: real `pre_dev`/`dev`/`post_dev` handlers will set this as the project dir or as a scratch space. Either way, the path is given, not invented.
+- **Decouples job identity from project identity**: a project may have many jobs; each gets its own working dir. Cleanup can be per-job rather than per-project.
+
+**Tradeoff**: `_jobs/work/` grows unbounded without cleanup. 14-B should add a "delete work dir on done" or "archive after N days" policy. Today (14-A), nothing cleans up — acceptable for tests since smoke test rms its tmp dir afterwards.
